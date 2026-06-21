@@ -1,4 +1,4 @@
-package gateway
+package euid
 
 import (
 	"encoding/hex"

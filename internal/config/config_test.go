@@ -82,6 +82,27 @@ func TestEnvOverridesFileAndDefault(t *testing.T) {
 	}
 }
 
+func TestEnvOverridesAllGatewayKeys(t *testing.T) {
+	// Every config key must be reachable via env (regression: keys without a
+	// registered default are silently ignored by viper's AutomaticEnv).
+	t.Setenv("CYLON_GATEWAY_LNS_URL", "ws://127.0.0.1:7000")
+	t.Setenv("CYLON_GATEWAY_EUI_PREFIX", "aabbcc")
+	t.Setenv("CYLON_GATEWAY_TCP_LISTEN", ":6001")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Gateway.LNSURL != "ws://127.0.0.1:7000" {
+		t.Errorf("LNSURL = %q, want ws://127.0.0.1:7000", cfg.Gateway.LNSURL)
+	}
+	if cfg.Gateway.EUIPrefix != "aabbcc" {
+		t.Errorf("EUIPrefix = %q, want aabbcc", cfg.Gateway.EUIPrefix)
+	}
+	if cfg.Gateway.TCPListen != ":6001" {
+		t.Errorf("TCPListen = %q, want :6001", cfg.Gateway.TCPListen)
+	}
+}
+
 func TestValidateRejectsBadLogLevel(t *testing.T) {
 	cfg := Default()
 	cfg.Server.LogLevel = "loud"

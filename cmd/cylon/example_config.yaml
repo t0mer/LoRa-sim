@@ -17,6 +17,8 @@ store:
 gateway:
   tcp_listen: ":6000"             # tags connect here over TCP
   eui: ""                         # empty => generate on first run and persist
+  lns_url: ""                     # LNS WebSocket URL; empty => gateway disabled (health only).
+                                  # e.g. ws://127.0.0.1:7000 for mock-lns
   connection:
     creds_dir: /etc/cylon/creds   # mapped volume; Basic Station credential layout
 

@@ -7,10 +7,10 @@ protocol, and is managed through a web UI. No radio hardware: tags talk to the
 gateway over TCP, and the gateway forwards to AWS over Basic Station (WebSocket).
 All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 
-> **Status:** early development. Phases 0–1 are in place (scaffolding,
-> persistence, gateway identity, and the tag PHY core); the gateway/Basic
-> Station client, TCP transport, REST/WebSocket API, and SPA land in subsequent
-> phases.
+> **Status:** early development. Phases 0–2 are in place (scaffolding,
+> persistence, gateway identity, the tag PHY core, and the gateway + Basic
+> Station LNS client + tag↔gateway TCP transport). The REST/WebSocket API,
+> orchestrator, and SPA land in subsequent phases.
 
 ## Features
 
@@ -32,6 +32,16 @@ All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
   counters survive restarts.
 - Sensitive columns (AppKey, session keys) **encrypted at rest** (AES-256-GCM,
   AAD-bound) via `CYLON_DB_KEY`.
+
+**Phase 2 — gateway, LNS & TCP transport**
+- Gateway speaks the **Basic Station LNS protocol** over WebSocket (version →
+  router_config handshake, jreq/updf uplinks, dnmsg/dntxed downlinks).
+- Tag↔gateway **NDJSON TCP transport** with a conn registry and downlink routing
+  (Class A, RX1/RX2 window selection).
+- The "bridge invariant": uplinks forward parsed fields with the FRMPayload kept
+  encrypted; downlink `pdu` is passed through to the addressed tag.
+- **`mock-lns`** offline LNS emulator and a standalone **`tag`** client, enabling
+  a full offline join→uplink→downlink cycle with no AWS.
 
 ## Quick start
 
@@ -75,6 +85,7 @@ sessions) lives in the database.
 | `server.log_level` | `CYLON_SERVER_LOG_LEVEL` | `info` | `debug`/`info`/`warning`/`error`. |
 | `store.path` | `CYLON_STORE_PATH` | `/var/lib/cylon/cylon.db` | SQLite database file. |
 | `gateway.tcp_listen` | `CYLON_GATEWAY_TCP_LISTEN` | `:6000` | Tag TCP listen address. |
+| `gateway.lns_url` | `CYLON_GATEWAY_LNS_URL` | _(empty)_ | LNS WebSocket URL. Empty disables the gateway (health only). |
 | `gateway.eui` | `CYLON_GATEWAY_EUI` | _(generated)_ | Override the gateway EUI (16 hex). |
 | `gateway.eui_prefix` | `CYLON_GATEWAY_EUI_PREFIX` | _(none)_ | Optional EUI prefix; a 3-byte OUI is expanded with `FFFE`. |
 | `gateway.connection.creds_dir` | `CYLON_GATEWAY_CONNECTION_CREDS_DIR` | `/etc/cylon/creds` | Basic Station credential volume. |
@@ -101,6 +112,32 @@ docker run --rm -p 8080:8080 \
   -v "$PWD/creds:/etc/cylon/creds" \
   cylon
 ```
+
+## Offline demo (no AWS)
+
+Run the gateway against the bundled `mock-lns` and drive it with the standalone
+`tag` client. Use a matching AppKey on the mock and the tag:
+
+```sh
+KEY=000102030405060708090a0b0c0d0e0f
+
+# 1. Mock LNS (emulates AWS IoT Core for LoRaWAN)
+go run ./cmd/mock-lns --listen 127.0.0.1:7000 --app-key "$KEY"
+
+# 2. Gateway (cylon serve) wired to the mock LNS
+CYLON_STORE_PATH=./cylon.db \
+CYLON_GATEWAY_LNS_URL=ws://127.0.0.1:7000 \
+CYLON_GATEWAY_TCP_LISTEN=127.0.0.1:6000 \
+  go run ./cmd/cylon serve
+
+# 3. A tag: join over TCP and send uplinks
+go run ./cmd/tag --gateway 127.0.0.1:6000 \
+  --dev-eui 0101010101010101 --join-eui 0202020202020202 \
+  --app-key "$KEY" --count 3 --interval 2s
+```
+
+The tag completes an OTAA join via a downlink routed back through the gateway,
+then relays uplinks all the way to the LNS.
 
 ## Development
 
