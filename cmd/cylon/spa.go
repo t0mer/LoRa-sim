@@ -1,10 +1,14 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
 
-// spaHandler returns the embedded SPA handler, or nil when no UI is embedded yet
-// (the frontend is added in a later step). When nil, the router mounts no
-// catch-all and serves only /healthz, /api, and /ws.
+	"github.com/t0mer/cylon/internal/api"
+	"github.com/t0mer/cylon/internal/webui"
+)
+
+// spaHandler returns the embedded SPA handler. When no build is embedded (only
+// the placeholder), it still mounts and returns a friendly notice.
 func spaHandler() http.Handler {
-	return nil
+	return api.SPAHandler(webui.FS())
 }
