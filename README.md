@@ -7,10 +7,12 @@ protocol, and is managed through a web UI. No radio hardware: tags talk to the
 gateway over TCP, and the gateway forwards to AWS over Basic Station (WebSocket).
 All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 
-> **Status:** active development. Phases 0–3 are in place — the full offline
+> **Status:** active development. Phases 0–4 are in place — the full offline
 > join→uplink→downlink cycle is **driveable from the browser** (REST + WebSocket
-> + embedded SPA), with a scenario orchestrator, Prometheus metrics, and Class C
-> downlinks. Real AWS (CUPS + credentials) and Class B follow.
+> + embedded SPA), with a scenario orchestrator, Prometheus metrics, Class C
+> downlinks, and the **CUPS + mutual-TLS connection to AWS IoT Core for
+> LoRaWAN** (validated offline against an emulated CUPS/LNS; live AWS needs your
+> credentials — see below). Class B follows.
 
 ## Screenshots
 
@@ -68,6 +70,16 @@ All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 - **Class C** unsolicited downlinks pushed from `mock-lns` over the always-open
   RX2 window.
 - Traffic persisted to SQLite and streamed live to the browser.
+
+**Phase 4 — CUPS, AWS connectivity & multi-region**
+- **Basic Station credential volume** (`cups.*` / `tc.*`) loader with `cupsCredCrc`
+  / `tcCredCrc` (CRC-32) and **mutual-TLS** config.
+- **CUPS client**: `update-info` over mTLS, binary length-prefixed response parse,
+  and **write-back** of the returned `tc.*` credentials.
+- Gateway connects either **CUPS-bootstrap → LNS** or **LNS-direct**, selected by
+  the gateway's `connection_mode`.
+- **All AWS RfRegions** modeled (Basic Station name mapping, Tier-1/Tier-2).
+- `mock-lns` also emulates **CUPS**, so the whole bootstrap is testable offline.
 
 ## Quick start
 
@@ -168,6 +180,41 @@ then relays uplinks all the way to the LNS.
 Then open **http://localhost:8080** in a browser to drive everything from the
 UI: create a fleet of tags, run `join_all` / `burst`, and watch the live traffic
 feed. (Create tags with the same AppKey you passed to `mock-lns` so they join.)
+
+## Connecting to AWS IoT Core for LoRaWAN
+
+To run against real AWS instead of `mock-lns`, leave `gateway.lns_url` empty and
+provide a **credentials volume** (`gateway.connection.creds_dir`, default
+`/etc/cylon/creds`) in the LoRa Basics Station layout (the certificate file may
+be `.cert` or `.crt`):
+
+```
+cups.uri    cups.trust    cups.cert|cups.crt    cups.key
+tc.uri      tc.trust      tc.cert|tc.crt        tc.key
+```
+
+The gateway's `connection_mode` (set via `PUT /api/gateway`, default `cups`)
+chooses the path:
+
+- **`cups`** — POST `update-info` to `cups.uri` over mutual TLS, then write the
+  returned `tc.*` credentials back and connect to the LNS.
+- **`lns`** — skip CUPS and connect directly using the `tc.*` credentials.
+
+### AWS-side onboarding (manual, one-time)
+
+Cylon does not provision AWS resources — do this in the AWS console / CLI:
+
+1. **Gateway** — onboard a LoRaWAN gateway whose **GatewayEui matches Cylon's**
+   (`cylon gateway-eui`, or set `CYLON_GATEWAY_EUI`). Download its CUPS/LNS
+   certificates into `creds_dir`.
+2. **Device(s)** — add each tag as a device: **DevEUI / JoinEUI(AppEUI) / AppKey**,
+   **LoRaWAN 1.0.3**, **OTAA**, matching device class, in a region from the
+   supported set. Create a **Destination** + rule to route uplinks.
+3. Set the gateway region in the UI (it maps to the Basic Station region name,
+   e.g. `EU868 → EU863-870`, `US915 → US902-928`).
+
+Tier-1 regions (EU868, US915, AU915, AS923-1) are validated against live AWS;
+Tier-2 are modeled.
 
 ## Development
 
