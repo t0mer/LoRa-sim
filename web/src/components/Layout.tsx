@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 const nav = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/tags", label: "Tags" },
+  { to: "/scenarios", label: "Scenarios" },
   { to: "/traffic", label: "Traffic" },
   { to: "/gateway", label: "Gateway" },
+  { to: "/settings", label: "Settings" },
 ];
 
 export default function Layout() {

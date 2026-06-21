@@ -4,6 +4,8 @@ import Dashboard from "./pages/Dashboard";
 import Tags from "./pages/Tags";
 import Traffic from "./pages/Traffic";
 import GatewayPage from "./pages/GatewayPage";
+import Scenarios from "./pages/Scenarios";
+import Settings from "./pages/Settings";
 
 export default function App() {
   return (
@@ -11,8 +13,10 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="tags" element={<Tags />} />
+        <Route path="scenarios" element={<Scenarios />} />
         <Route path="traffic" element={<Traffic />} />
         <Route path="gateway" element={<GatewayPage />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
   );
