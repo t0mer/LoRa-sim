@@ -1,0 +1,20 @@
+# Gitleaks configuration for Cylon.
+#
+# Extends the default ruleset and allowlists test fixtures: the simulator's tests
+# use hardcoded, obviously-fake LoRaWAN keys (AppKey/session keys) as test
+# vectors. These are not real credentials. Real secrets are provided at runtime
+# via env (CYLON_DB_KEY) and credential volumes, never committed.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and example LoRaWAN keys (not real secrets)"
+paths = [
+  '''.*_test\.go$''',
+]
+regexes = [
+  # Fake keys used as test vectors / examples across the codebase and docs.
+  '''00112233445566778899aabbccddeeff''',
+  '''000102030405060708090a0b0c0d0e0f''',
+]
