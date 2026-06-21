@@ -22,6 +22,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/t0mer/cylon/internal/gateway/protocol"
+	"github.com/t0mer/cylon/internal/tag"
 )
 
 // Config configures the emulated network server.
@@ -52,20 +53,31 @@ func (c *Config) withDefaults() {
 	}
 }
 
+// joinInfo remembers what the mock issued for a device so it can later derive
+// that device's session keys (e.g. to encrypt an unsolicited Class C downlink).
+type joinInfo struct {
+	joinNonce uint32
+	devNonce  uint16
+	fcntDown  uint32
+}
+
 // Server is the mock LNS. Use Handler with an http.Server (or httptest).
 type Server struct {
 	cfg       Config
 	joinNonce atomic.Uint32
 	diid      atomic.Int64
 
-	mu    sync.Mutex
-	updfs []protocol.Updf // received data uplinks (for assertions)
+	mu       sync.Mutex
+	updfs    []protocol.Updf // received data uplinks (for assertions)
+	conn     *websocket.Conn // most recent gateway connection
+	wmu      sync.Mutex      // serializes writes to conn
+	sessions map[string]*joinInfo
 }
 
 // New builds a mock LNS from cfg.
 func New(cfg Config) *Server {
 	cfg.withDefaults()
-	s := &Server{cfg: cfg}
+	s := &Server{cfg: cfg, sessions: make(map[string]*joinInfo)}
 	s.joinNonce.Store(cfg.JoinNonce)
 	return s
 }
@@ -95,6 +107,10 @@ func (s *Server) Handler() http.HandlerFunc {
 func (s *Server) serve(ctx context.Context, c *websocket.Conn) error {
 	c.SetReadLimit(1 << 20)
 
+	s.mu.Lock()
+	s.conn = c
+	s.mu.Unlock()
+
 	// Expect version, then push router_config.
 	if _, _, err := c.Read(ctx); err != nil {
 		return err
@@ -103,7 +119,7 @@ func (s *Server) serve(ctx context.Context, c *websocket.Conn) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Write(ctx, websocket.MessageText, rc); err != nil {
+	if err := s.write(ctx, c, rc); err != nil {
 		return err
 	}
 
@@ -143,10 +159,14 @@ func (s *Server) routerConfig() protocol.RouterConfig {
 }
 
 func (s *Server) handleJreq(ctx context.Context, c *websocket.Conn, jr *protocol.Jreq) error {
-	accept, err := s.buildJoinAccept(jr)
+	joinNonce := s.joinNonce.Add(1)
+	accept, err := s.buildJoinAccept(jr, joinNonce)
 	if err != nil {
 		return fmt.Errorf("building join-accept: %w", err)
 	}
+	s.mu.Lock()
+	s.sessions[jr.DevEui] = &joinInfo{joinNonce: joinNonce, devNonce: jr.DevNonce}
+	s.mu.Unlock()
 	dn := protocol.Dnmsg{
 		MsgType: protocol.TypeDnmsg,
 		DevEui:  jr.DevEui,
@@ -165,10 +185,77 @@ func (s *Server) handleJreq(ctx context.Context, c *websocket.Conn, jr *protocol
 	if err != nil {
 		return err
 	}
+	return s.write(ctx, c, b)
+}
+
+// write serializes writes to the gateway connection (one writer at a time).
+func (s *Server) write(ctx context.Context, c *websocket.Conn, b []byte) error {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
 	return c.Write(ctx, websocket.MessageText, b)
 }
 
-func (s *Server) buildJoinAccept(jr *protocol.Jreq) ([]byte, error) {
+// PushClassC sends an unsolicited Class C (dC=2) data downlink to a joined
+// device over the RX2 window. It derives the device's session keys from the
+// join it issued and encrypts the payload, exercising the always-on RX path.
+func (s *Server) PushClassC(ctx context.Context, devEUI string, fport uint8, data []byte) error {
+	s.mu.Lock()
+	conn := s.conn
+	ji := s.sessions[devEUI]
+	if ji != nil {
+		ji.fcntDown++
+	}
+	s.mu.Unlock()
+
+	if conn == nil {
+		return fmt.Errorf("no gateway connected")
+	}
+	if ji == nil {
+		return fmt.Errorf("device %s has not joined", devEUI)
+	}
+
+	nwk, err := tag.DeriveNwkSKey(s.cfg.AppKey, s.cfg.NetID, lorawan.JoinNonce(ji.joinNonce), lorawan.DevNonce(ji.devNonce))
+	if err != nil {
+		return err
+	}
+	app, err := tag.DeriveAppSKey(s.cfg.AppKey, s.cfg.NetID, lorawan.JoinNonce(ji.joinNonce), lorawan.DevNonce(ji.devNonce))
+	if err != nil {
+		return err
+	}
+	pdu, err := buildDataDownlink(nwk, app, s.cfg.DevAddr, ji.fcntDown-1, fport, data)
+	if err != nil {
+		return err
+	}
+	dn := protocol.Dnmsg{
+		MsgType: protocol.TypeDnmsg, DevEui: devEUI, DC: 2, DIID: s.diid.Add(1),
+		Pdu: hex.EncodeToString(pdu), RX2DR: s.cfg.RX2DR, RX2Freq: s.cfg.RX2Freq,
+	}
+	b, err := protocol.Encode(dn)
+	if err != nil {
+		return err
+	}
+	return s.write(ctx, conn, b)
+}
+
+func buildDataDownlink(nwk, app lorawan.AES128Key, devAddr lorawan.DevAddr, fcnt uint32, fport uint8, data []byte) ([]byte, error) {
+	phy := lorawan.PHYPayload{
+		MHDR: lorawan.MHDR{MType: lorawan.UnconfirmedDataDown, Major: lorawan.LoRaWANR1},
+		MACPayload: &lorawan.MACPayload{
+			FHDR:       lorawan.FHDR{DevAddr: devAddr, FCnt: fcnt},
+			FPort:      &fport,
+			FRMPayload: []lorawan.Payload{&lorawan.DataPayload{Bytes: data}},
+		},
+	}
+	if err := phy.EncryptFRMPayload(app); err != nil {
+		return nil, err
+	}
+	if err := phy.SetDownlinkDataMIC(lorawan.LoRaWAN1_0, 0, nwk); err != nil {
+		return nil, err
+	}
+	return phy.MarshalBinary()
+}
+
+func (s *Server) buildJoinAccept(jr *protocol.Jreq, joinNonce uint32) ([]byte, error) {
 	joinEUI, err := parseEUI64(jr.JoinEui)
 	if err != nil {
 		return nil, err
@@ -176,7 +263,7 @@ func (s *Server) buildJoinAccept(jr *protocol.Jreq) ([]byte, error) {
 	phy := lorawan.PHYPayload{
 		MHDR: lorawan.MHDR{MType: lorawan.JoinAccept, Major: lorawan.LoRaWANR1},
 		MACPayload: &lorawan.JoinAcceptPayload{
-			JoinNonce:  lorawan.JoinNonce(s.joinNonce.Add(1)),
+			JoinNonce:  lorawan.JoinNonce(joinNonce),
 			HomeNetID:  s.cfg.NetID,
 			DevAddr:    s.cfg.DevAddr,
 			DLSettings: lorawan.DLSettings{RX2DataRate: s.cfg.RX2DR, RX1DROffset: 0},

@@ -4,6 +4,8 @@ project_name: cylon
 
 before:
   hooks:
+    # Build the SPA into the Go embed dir before compiling, so it is embedded.
+    - bash -c "cd web && npm ci && npm run build"
     - go mod tidy
 
 builds:

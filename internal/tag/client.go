@@ -23,6 +23,9 @@ type Client struct {
 
 	joined atomic.Bool
 	joinCh chan []byte
+
+	// DownlinkHook, if set, is called for each successfully decoded downlink.
+	DownlinkHook func(*Downlink)
 }
 
 // NewClient wraps a Device and a connected transport.Conn.
@@ -68,9 +71,13 @@ func (c *Client) Run(ctx context.Context) error {
 			}
 			continue
 		}
-		if _, err := c.dev.HandleDownlink(ctx, pdu); err != nil {
+		dl, err := c.dev.HandleDownlink(ctx, pdu)
+		if err != nil {
 			// Stale/invalid downlinks are dropped; keep serving.
 			continue
+		}
+		if c.DownlinkHook != nil {
+			c.DownlinkHook(dl)
 		}
 	}
 }
@@ -97,18 +104,24 @@ func (c *Client) Join(ctx context.Context) error {
 	}
 }
 
-// SendUplink builds and transmits a data uplink. With override nil the payload
-// comes from the device's generator.
-func (c *Client) SendUplink(ctx context.Context, override []byte) error {
+// SendUplink builds and transmits a data uplink, returning the FCnt used. With
+// override nil the payload comes from the device's generator.
+func (c *Client) SendUplink(ctx context.Context, override []byte) (uint32, error) {
 	if !c.joined.Load() {
-		return fmt.Errorf("cannot send uplink before join")
+		return 0, fmt.Errorf("cannot send uplink before join")
 	}
-	frame, _, err := c.dev.BuildUplink(ctx, override)
+	frame, fcnt, err := c.dev.BuildUplink(ctx, override)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return c.sendUp(frame)
+	if err := c.sendUp(frame); err != nil {
+		return 0, err
+	}
+	return fcnt, nil
 }
+
+// FPort returns the device's configured uplink FPort.
+func (c *Client) FPort() int { return c.dev.tag.FPort }
 
 func (c *Client) sendUp(frame []byte) error {
 	return c.conn.Write(transport.Envelope{
