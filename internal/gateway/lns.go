@@ -2,8 +2,10 @@ package gateway
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/coder/websocket"
@@ -25,11 +27,24 @@ type LNS struct {
 	config *protocol.RouterConfig
 }
 
-// ConnectLNS dials the LNS WebSocket endpoint, sends the version message, and
-// waits for the router_config that establishes the channel plan.
+// ConnectLNS dials the LNS WebSocket endpoint over a plain connection (e.g.
+// ws:// to mock-lns), sends version, and awaits router_config.
 func ConnectLNS(parent context.Context, url string, v protocol.Version) (*LNS, error) {
+	return ConnectLNSTLS(parent, url, v, nil)
+}
+
+// ConnectLNSTLS is ConnectLNS with an optional mutual-TLS config for wss://
+// endpoints (real AWS IoT Core for LoRaWAN). A nil tlsConfig dials plain.
+func ConnectLNSTLS(parent context.Context, url string, v protocol.Version, tlsConfig *tls.Config) (*LNS, error) {
 	ctx, cancel := context.WithCancel(parent)
-	conn, _, err := websocket.Dial(ctx, url, nil)
+
+	var opts *websocket.DialOptions
+	if tlsConfig != nil {
+		opts = &websocket.DialOptions{
+			HTTPClient: &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}},
+		}
+	}
+	conn, _, err := websocket.Dial(ctx, url, opts)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("dialing LNS %s: %w", url, err)

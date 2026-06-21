@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/t0mer/cylon/internal/api"
 	"github.com/t0mer/cylon/internal/config"
+	"github.com/t0mer/cylon/internal/creds"
 	"github.com/t0mer/cylon/internal/db"
 	"github.com/t0mer/cylon/internal/gateway"
 	"github.com/t0mer/cylon/internal/gateway/protocol"
@@ -62,18 +64,22 @@ func newServeCmd() *cobra.Command {
 			hub := api.NewHub()
 			publisher := api.NewPublisher(st.Events(), hub, m, logger)
 
-			// When an LNS URL is configured, run the gateway and orchestrator.
+			// Run the gateway + orchestrator when a connection is configured:
+			// either a direct LNS URL (mock-lns) or credentials in the volume
+			// (real AWS via CUPS bootstrap or LNS-direct).
 			var gw *gateway.Gateway
 			var orch *sim.Orchestrator
-			if cfg.Gateway.LNSURL != "" {
+			if gatewayEnabled(cfg, g) {
 				var closeGW func()
-				gw, closeGW, err = startGateway(ctx, cfg, g.EUI, logger)
+				gw, closeGW, err = startGateway(ctx, cfg, g, logger)
 				if err != nil {
 					return err
 				}
 				defer closeGW()
 				orch = sim.New(st, gw.Addr(), publisher, logger)
 				defer orch.StopAll()
+			} else {
+				logger.Info("gateway disabled (no lns_url and no credentials)")
 			}
 
 			bindGauges(m, hub, gw, orch)
@@ -136,20 +142,41 @@ func bindGauges(m *metrics.Metrics, hub *api.Hub, gw *gateway.Gateway, orch *sim
 	})
 }
 
-// startGateway connects the gateway to the LNS and starts its tag-facing TCP
-// listener. The returned close func stops the listener and the LNS connection.
-func startGateway(ctx context.Context, cfg *config.Config, eui string, logger *slog.Logger) (*gateway.Gateway, func(), error) {
-	lns, err := gateway.ConnectLNS(ctx, cfg.Gateway.LNSURL, protocol.Version{
+// gatewayEnabled reports whether a usable connection is configured: a direct LNS
+// URL, or credentials in the volume for the configured connection mode.
+func gatewayEnabled(cfg *config.Config, g *store.Gateway) bool {
+	if cfg.Gateway.LNSURL != "" {
+		return true
+	}
+	c, err := creds.Load(cfg.Gateway.Connection.CredsDir)
+	if err != nil {
+		return false
+	}
+	if g.ConnectionMode == "cups" {
+		return c.HasCUPS()
+	}
+	return c.HasTC()
+}
+
+// startGateway resolves the LNS connection, connects, and starts the tag-facing
+// TCP listener. The returned close func stops the listener and LNS connection.
+func startGateway(ctx context.Context, cfg *config.Config, g *store.Gateway, logger *slog.Logger) (*gateway.Gateway, func(), error) {
+	url, tlsCfg, err := resolveLNS(ctx, cfg, g, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	lns, err := gateway.ConnectLNSTLS(ctx, url, protocol.Version{
 		Station:  "cylon",
 		Model:    "cylon-sim",
 		Firmware: version.Version,
 		Protocol: 2,
-	})
+	}, tlsCfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("connecting to LNS: %w", err)
 	}
 
-	gw := gateway.New(eui, lns, logger)
+	gw := gateway.New(g.EUI, lns, logger)
 	if err := gw.ListenTCP(cfg.Gateway.TCPListen); err != nil {
 		lns.Close()
 		return nil, nil, err
@@ -164,4 +191,45 @@ func startGateway(ctx context.Context, cfg *config.Config, eui string, logger *s
 		gw.Close()
 		lns.Close()
 	}, nil
+}
+
+// resolveLNS determines the LNS WebSocket URL and TLS config. A configured
+// lns_url is used directly (plain ws, for mock-lns). Otherwise it uses the
+// credentials volume: connection_mode "cups" bootstraps CUPS first (writing back
+// tc.*), then both modes connect to the LNS over mutual TLS.
+func resolveLNS(ctx context.Context, cfg *config.Config, g *store.Gateway, logger *slog.Logger) (string, *tls.Config, error) {
+	if cfg.Gateway.LNSURL != "" {
+		return cfg.Gateway.LNSURL, nil, nil
+	}
+
+	credsDir := cfg.Gateway.Connection.CredsDir
+	c, err := creds.Load(credsDir)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if g.ConnectionMode == "cups" {
+		if !c.HasCUPS() {
+			return "", nil, fmt.Errorf("connection_mode is cups but no CUPS credentials in %s", credsDir)
+		}
+		logger.Info("CUPS bootstrap", "uri", c.CupsURI)
+		if _, err := gateway.BootstrapCUPS(ctx, credsDir, protocol.CupsRequest{
+			Router: g.EUI, Station: "cylon", Model: "cylon-sim", Package: version.Version,
+		}); err != nil {
+			return "", nil, fmt.Errorf("CUPS bootstrap: %w", err)
+		}
+		if c, err = creds.Load(credsDir); err != nil {
+			return "", nil, err
+		}
+	}
+
+	if !c.HasTC() {
+		return "", nil, fmt.Errorf("no LNS (tc) credentials available in %s", credsDir)
+	}
+	tlsCfg, err := c.TCTLSConfig()
+	if err != nil {
+		return "", nil, err
+	}
+	logger.Info("LNS connection", "uri", c.TcURI, "mode", g.ConnectionMode)
+	return c.TcURI, tlsCfg, nil
 }
