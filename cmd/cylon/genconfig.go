@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 
 	"github.com/spf13/cobra"
 )
@@ -15,7 +16,7 @@ func newGenConfigCmd() *cobra.Command {
 		Short: "Print an example configuration file to stdout",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Print(exampleConfig)
+			fmt.Fprint(cmd.OutOrStdout(), exampleConfig)
 			return nil
 		},
 	}

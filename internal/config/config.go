@@ -37,6 +37,7 @@ type StoreConfig struct {
 // and generated+persisted on first run.
 type GatewayConfig struct {
 	EUI        string           `mapstructure:"eui"`
+	EUIPrefix  string           `mapstructure:"eui_prefix"`
 	TCPListen  string           `mapstructure:"tcp_listen"`
 	Connection ConnectionConfig `mapstructure:"connection"`
 }
@@ -55,7 +56,8 @@ var (
 	validLogLevels = map[string]bool{
 		"debug": true, "info": true, "warning": true, "warn": true, "error": true,
 	}
-	euiRe = regexp.MustCompile(`^[0-9a-fA-F]{16}$`)
+	euiRe       = regexp.MustCompile(`^[0-9a-fA-F]{16}$`)
+	euiPrefixRe = regexp.MustCompile(`^([0-9a-fA-F]{2}){1,8}$`)
 )
 
 // Default returns a Config populated with built-in defaults.
@@ -132,6 +134,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.EUI != "" && !euiRe.MatchString(c.Gateway.EUI) {
 		return fmt.Errorf("gateway.eui %q is invalid (want 16 hex chars)", c.Gateway.EUI)
+	}
+	if c.Gateway.EUIPrefix != "" && !euiPrefixRe.MatchString(c.Gateway.EUIPrefix) {
+		return fmt.Errorf("gateway.eui_prefix %q is invalid (want even-length hex up to 16 chars)", c.Gateway.EUIPrefix)
 	}
 	return nil
 }

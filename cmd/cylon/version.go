@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/t0mer/cylon/internal/version"
@@ -12,7 +14,7 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print the cylon version and exit",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Println(version.Version)
+			fmt.Fprintln(cmd.OutOrStdout(), version.Version)
 			return nil
 		},
 	}

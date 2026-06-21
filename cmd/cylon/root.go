@@ -20,6 +20,7 @@ func newRootCmd() *cobra.Command {
 		newVersionCmd(),
 		newGenConfigCmd(),
 		newMigrateCmd(),
+		newGatewayEUICmd(),
 	)
 
 	return root
