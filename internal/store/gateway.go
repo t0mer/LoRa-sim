@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/t0mer/cylon/internal/gateway"
+	"github.com/t0mer/cylon/internal/euid"
 )
 
 // Gateway is the single logical gateway row.
@@ -57,7 +57,7 @@ func (r *GatewayRepo) create(ctx context.Context, eui string) (*Gateway, error) 
 // SetEUI updates the gateway EUI, creating the row if absent. The EUI is
 // normalized and validated before persisting.
 func (r *GatewayRepo) SetEUI(ctx context.Context, eui string) (*Gateway, error) {
-	norm, err := gateway.NormalizeEUI(eui)
+	norm, err := euid.NormalizeEUI(eui)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (r *GatewayRepo) EnsureEUI(ctx context.Context, configured, prefix string) 
 	} else if !errors.Is(err, ErrNotFound) {
 		return nil, err
 	}
-	eui, err := gateway.GenerateEUI(prefix)
+	eui, err := euid.GenerateEUI(prefix)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,7 @@
-// Package gateway holds the gateway simulator. In Phase 0 it provides the
-// gateway EUI-64 identity helpers; later phases add the TCP server, Basic
-// Station client, channel plan, and RX-window logic.
-package gateway
+// Package euid provides EUI-64 helpers (generation and normalization) used for
+// the gateway identity. It is a low-level leaf package so persistence and the
+// gateway simulator can both depend on it without creating an import cycle.
+package euid
 
 import (
 	"crypto/rand"
