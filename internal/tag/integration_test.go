@@ -117,7 +117,7 @@ func TestEndToEndJoinAndUplinkOverTCP(t *testing.T) {
 	}
 
 	// 6. data uplink relayed to the LNS
-	if err := client.SendUplink(ctx, nil); err != nil {
+	if _, err := client.SendUplink(ctx, nil); err != nil {
 		t.Fatalf("SendUplink: %v", err)
 	}
 

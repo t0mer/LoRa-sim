@@ -121,7 +121,7 @@ func run() error {
 	}
 
 	for i := 0; *count == 0 || i < *count; i++ {
-		if err := client.SendUplink(ctx, nil); err != nil {
+		if _, err := client.SendUplink(ctx, nil); err != nil {
 			return fmt.Errorf("uplink: %w", err)
 		}
 		logger.Info("uplink sent", "n", i+1)
