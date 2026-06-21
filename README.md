@@ -7,10 +7,25 @@ protocol, and is managed through a web UI. No radio hardware: tags talk to the
 gateway over TCP, and the gateway forwards to AWS over Basic Station (WebSocket).
 All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 
-> **Status:** early development. Phases 0–2 are in place (scaffolding,
-> persistence, gateway identity, the tag PHY core, and the gateway + Basic
-> Station LNS client + tag↔gateway TCP transport). The REST/WebSocket API,
-> orchestrator, and SPA land in subsequent phases.
+> **Status:** active development. Phases 0–3 are in place — the full offline
+> join→uplink→downlink cycle is **driveable from the browser** (REST + WebSocket
+> + embedded SPA), with a scenario orchestrator, Prometheus metrics, and Class C
+> downlinks. Real AWS (CUPS + credentials) and Class B follow.
+
+## Screenshots
+
+### Dashboard — live traffic & gateway status
+![Dashboard](assets/screenshots/dashboard.png)
+
+### Tags — fleet management, join & uplink
+![Tags](assets/screenshots/tags.png)
+
+### Traffic — live, filterable event log
+![Traffic](assets/screenshots/traffic.png)
+
+### Gateway & light theme
+![Gateway](assets/screenshots/gateway.png)
+![Dashboard (light)](assets/screenshots/dashboard-light.png)
 
 ## Features
 
@@ -42,6 +57,17 @@ All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
   encrypted; downlink `pdu` is passed through to the addressed tag.
 - **`mock-lns`** offline LNS emulator and a standalone **`tag`** client, enabling
   a full offline join→uplink→downlink cycle with no AWS.
+
+**Phase 3 — web app, orchestrator & Class C**
+- **REST API** (`/api`) + **WebSocket live feed** (`/ws`), with the React + Vite +
+  Tailwind **SPA embedded** into the binary (`go:embed`).
+- **Orchestrator** drives in-process tags over loopback TCP; scenario primitives
+  `join_all`, `uplink`, and parallel `burst` (validated with 50 parallel tags).
+- **Prometheus metrics** at `/metrics` (uplinks, downlinks, joins, active tags,
+  WS clients, …).
+- **Class C** unsolicited downlinks pushed from `mock-lns` over the always-open
+  RX2 window.
+- Traffic persisted to SQLite and streamed live to the browser.
 
 ## Quick start
 
@@ -139,12 +165,27 @@ go run ./cmd/tag --gateway 127.0.0.1:6000 \
 The tag completes an OTAA join via a downlink routed back through the gateway,
 then relays uplinks all the way to the LNS.
 
+Then open **http://localhost:8080** in a browser to drive everything from the
+UI: create a fleet of tags, run `join_all` / `burst`, and watch the live traffic
+feed. (Create tags with the same AppKey you passed to `mock-lns` so they join.)
+
 ## Development
 
 ```sh
-go test ./...        # unit tests
+# Backend tests
+go test ./...
 go vet ./...
+
+# Build the embedded UI (required before `go build` for a UI-enabled binary)
+cd web && npm install && npm run build
+
+# Or run backend + frontend with hot reload (starts mock-lns + cylon + Vite):
+./scripts/dev.sh
 ```
+
+The SPA build writes to `internal/webui/dist`, which is embedded via `go:embed`.
+A tracked `.gitkeep` keeps the embed compiling before any build; the production
+image and release binaries build the UI first (see the Dockerfile / goreleaser).
 
 ## License
 
