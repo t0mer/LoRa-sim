@@ -7,12 +7,12 @@ protocol, and is managed through a web UI. No radio hardware: tags talk to the
 gateway over TCP, and the gateway forwards to AWS over Basic Station (WebSocket).
 All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 
-> **Status:** active development. Phases 0–4 are in place — the full offline
-> join→uplink→downlink cycle is **driveable from the browser** (REST + WebSocket
-> + embedded SPA), with a scenario orchestrator, Prometheus metrics, Class C
-> downlinks, and the **CUPS + mutual-TLS connection to AWS IoT Core for
-> LoRaWAN** (validated offline against an emulated CUPS/LNS; live AWS needs your
-> credentials — see below). Class B follows.
+> **Status:** feature-complete offline. Phases 0–5 are in place — the full
+> join→uplink→downlink cycle (Class A/B/C) is **driveable from the browser**
+> (REST + WebSocket + embedded SPA), with a scenario orchestrator, Prometheus
+> metrics, event retention, and the **CUPS + mutual-TLS connection to AWS IoT
+> Core for LoRaWAN** (validated offline against an emulated CUPS/LNS; live AWS
+> needs your credentials — see below).
 
 ## Screenshots
 
@@ -22,11 +22,15 @@ All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 ### Tags — fleet management, join & uplink
 ![Tags](assets/screenshots/tags.png)
 
+### Scenarios — join_all & parallel bursts
+![Scenarios](assets/screenshots/scenarios.png)
+
 ### Traffic — live, filterable event log
 ![Traffic](assets/screenshots/traffic.png)
 
-### Gateway & light theme
+### Gateway, Settings & light theme
 ![Gateway](assets/screenshots/gateway.png)
+![Settings](assets/screenshots/settings.png)
 ![Dashboard (light)](assets/screenshots/dashboard-light.png)
 
 ## Features
@@ -80,6 +84,12 @@ All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
   the gateway's `connection_mode`.
 - **All AWS RfRegions** modeled (Basic Station name mapping, Tier-1/Tier-2).
 - `mock-lns` also emulates **CUPS**, so the whole bootstrap is testable offline.
+
+**Phase 5 — Class B & polish**
+- **Class B** beacon/ping-slot timing (AES-randomized ping offset, GPS-aligned)
+  and a ping-slot downlink path (`mock-lns` `PushClassB`).
+- **Scenarios** and **Settings** pages in the UI.
+- **Event retention** with a periodic prune job (`store.events_retention`).
 
 ## Quick start
 
