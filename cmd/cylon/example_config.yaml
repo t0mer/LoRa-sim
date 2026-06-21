@@ -13,6 +13,7 @@ server:
 
 store:
   path: /var/lib/cylon/cylon.db   # mapped volume; SQLite database file
+  events_retention: 10000         # cap traffic events kept (0 = unlimited)
 
 gateway:
   tcp_listen: ":6000"             # tags connect here over TCP

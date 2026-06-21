@@ -83,6 +83,7 @@ func newServeCmd() *cobra.Command {
 			}
 
 			bindGauges(m, hub, gw, orch)
+			startPruneJob(ctx, st, cfg.Store.EventsRetention, logger)
 
 			a := api.NewAPI(st, hub, orch, gw, version.Version, g.EUI)
 			srv := &http.Server{
@@ -122,6 +123,30 @@ func newServeCmd() *cobra.Command {
 			}
 		},
 	}
+}
+
+// startPruneJob periodically caps the events table at retention rows. retention
+// <= 0 disables pruning.
+func startPruneJob(ctx context.Context, st *store.Store, retention int, logger *slog.Logger) {
+	if retention <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n, err := st.Events().Prune(ctx, retention); err != nil {
+					logger.Debug("event prune", "err", err)
+				} else if n > 0 {
+					logger.Debug("pruned events", "deleted", n, "kept", retention)
+				}
+			}
+		}
+	}()
 }
 
 func bindGauges(m *metrics.Metrics, hub *api.Hub, gw *gateway.Gateway, orch *sim.Orchestrator) {

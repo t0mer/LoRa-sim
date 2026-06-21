@@ -28,9 +28,12 @@ type ServerConfig struct {
 	LogLevel      string `mapstructure:"log_level"`
 }
 
-// StoreConfig holds the SQLite database location.
+// StoreConfig holds the SQLite database location and retention policy.
 type StoreConfig struct {
 	Path string `mapstructure:"path"`
+	// EventsRetention caps the number of traffic events kept; older events are
+	// pruned periodically. 0 disables pruning (keep everything).
+	EventsRetention int `mapstructure:"events_retention"`
 }
 
 // GatewayConfig holds gateway bootstrap settings. The EUI is empty by default
@@ -70,7 +73,8 @@ func Default() *Config {
 			LogLevel:      "info",
 		},
 		Store: StoreConfig{
-			Path: "/var/lib/cylon/cylon.db",
+			Path:            "/var/lib/cylon/cylon.db",
+			EventsRetention: 10000,
 		},
 		Gateway: GatewayConfig{
 			EUI:       "",
@@ -96,6 +100,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("server.metrics_listen", d.Server.MetricsListen)
 	v.SetDefault("server.log_level", d.Server.LogLevel)
 	v.SetDefault("store.path", d.Store.Path)
+	v.SetDefault("store.events_retention", d.Store.EventsRetention)
 	v.SetDefault("gateway.eui", d.Gateway.EUI)
 	v.SetDefault("gateway.eui_prefix", d.Gateway.EUIPrefix)
 	v.SetDefault("gateway.tcp_listen", d.Gateway.TCPListen)

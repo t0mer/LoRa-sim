@@ -23,6 +23,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Store.Path != "/var/lib/cylon/cylon.db" {
 		t.Errorf("Store.Path = %q, want /var/lib/cylon/cylon.db", cfg.Store.Path)
 	}
+	if cfg.Store.EventsRetention != 10000 {
+		t.Errorf("Store.EventsRetention = %d, want 10000", cfg.Store.EventsRetention)
+	}
 	if cfg.Gateway.TCPListen != ":6000" {
 		t.Errorf("Gateway.TCPListen = %q, want :6000", cfg.Gateway.TCPListen)
 	}
