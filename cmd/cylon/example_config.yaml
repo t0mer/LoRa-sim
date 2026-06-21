@@ -1,0 +1,28 @@
+# Cylon bootstrap configuration.
+#
+# Only server/bootstrap settings live here. Runtime data (gateway identity,
+# tags, sessions) lives in the SQLite database and is managed via the UI/API.
+#
+# Precedence: environment (CYLON_*) > this file > built-in defaults.
+# Example env override: CYLON_SERVER_HTTP_LISTEN=":9090"
+
+server:
+  http_listen: ":8080"      # UI + API + /ws
+  metrics_listen: ":9100"   # Prometheus
+  log_level: info           # debug | info | warning | error
+
+store:
+  path: /var/lib/cylon/cylon.db   # mapped volume; SQLite database file
+
+gateway:
+  tcp_listen: ":6000"             # tags connect here over TCP
+  eui: ""                         # empty => generate on first run and persist
+  connection:
+    creds_dir: /etc/cylon/creds   # mapped volume; Basic Station credential layout
+
+sim:
+  realtime: true
+
+# Secrets are provided via environment, never this file:
+#   CYLON_DB_KEY        column encryption key for secrets at rest
+#   CYLON_GATEWAY_EUI   override the gateway EUI
