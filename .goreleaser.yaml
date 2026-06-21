@@ -1,0 +1,52 @@
+version: 2
+
+project_name: cylon
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cylon
+    main: ./cmd/cylon
+    binary: cylon
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/t0mer/cylon/internal/version.Version={{ .Version }}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: darwin
+        goarch: arm # no 32-bit macOS
+      - goos: windows
+        goarch: arm # skip 32-bit Windows ARM
+
+archives:
+  - id: cylon
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github

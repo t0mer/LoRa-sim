@@ -1,0 +1,27 @@
+# Pre-commit security gates. Output is written to the git-ignored scans/ dir.
+# Install tooling locally:
+#   go install github.com/securego/gosec/v2/cmd/gosec@latest
+#   go install golang.org/x/vuln/cmd/govulncheck@latest
+#   go install github.com/gitleaks/gitleaks/v8@latest
+repos:
+  - repo: local
+    hooks:
+      - id: gosec
+        name: gosec (static security analysis)
+        entry: bash -c 'mkdir -p scans && gosec -quiet -fmt=json -out=scans/gosec.json ./... && gosec -quiet ./...'
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      - id: govulncheck
+        name: govulncheck (known vulnerabilities)
+        entry: bash -c 'mkdir -p scans && govulncheck ./... | tee scans/govulncheck.txt'
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      - id: gitleaks
+        name: gitleaks (secret scanning)
+        entry: bash -c 'mkdir -p scans && gitleaks detect --no-banner --redact --report-path=scans/gitleaks.json'
+        language: system
+        pass_filenames: false
