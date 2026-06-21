@@ -102,6 +102,10 @@ func TestTagCRUDAndMasking(t *testing.T) {
 	if len(list) != 1 {
 		t.Errorf("list len = %d", len(list))
 	}
+	// The list must include session state so the table shows joined/FCnt.
+	if list[0].Session == nil {
+		t.Error("list tag missing session state")
+	}
 
 	// Get detail includes session
 	id := created[0].ID

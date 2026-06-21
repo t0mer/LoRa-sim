@@ -77,7 +77,14 @@ func (a *API) listTags(w http.ResponseWriter, r *http.Request) {
 	running := a.runningSet()
 	out := make([]tagDTO, 0, len(tags))
 	for _, t := range tags {
-		out = append(out, a.toTagDTO(t, running))
+		dto := a.toTagDTO(t, running)
+		if s, err := a.store.Sessions().Get(r.Context(), t.ID); err == nil {
+			dto.Session = &sessionDTO{
+				Joined: s.Joined, DevAddr: s.DevAddr, FCntUp: s.FCntUp,
+				FCntDown: s.FCntDown, DevNonce: s.DevNonce,
+			}
+		}
+		out = append(out, dto)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
