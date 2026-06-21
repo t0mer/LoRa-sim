@@ -21,6 +21,7 @@ func newRootCmd() *cobra.Command {
 		newGenConfigCmd(),
 		newMigrateCmd(),
 		newGatewayEUICmd(),
+		newServeCmd(),
 	)
 
 	return root

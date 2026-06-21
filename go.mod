@@ -3,6 +3,7 @@ module github.com/t0mer/cylon
 go 1.25.11
 
 require (
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
