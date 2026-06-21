@@ -78,6 +78,23 @@ func (r *GatewayRepo) SetEUI(ctx context.Context, eui string) (*Gateway, error) 
 	return r.Get(ctx)
 }
 
+// UpdateConfig updates the gateway's region, sub-band, and connection mode.
+func (r *GatewayRepo) UpdateConfig(ctx context.Context, region string, subBand int, mode string) (*Gateway, error) {
+	now := r.s.clock()
+	r.s.wmu.Lock()
+	res, err := r.s.db.ExecContext(ctx,
+		`UPDATE gateway SET region = ?, sub_band = ?, connection_mode = ?, updated_at = ? WHERE id = 1`,
+		region, subBand, mode, now)
+	r.s.wmu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("updating gateway config: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
+	}
+	return r.Get(ctx)
+}
+
 // EnsureEUI resolves the gateway EUI for startup. A configured EUI (from config
 // or env) wins and is persisted; otherwise an existing row is reused; otherwise
 // a fresh EUI is generated from the optional prefix and persisted.

@@ -64,6 +64,13 @@ func (g *Gateway) ListenTCP(addr string) error {
 // Addr returns the tag-facing TCP listen address.
 func (g *Gateway) Addr() string { return g.srv.Addr() }
 
+// ConnCount returns the number of registered tag connections.
+func (g *Gateway) ConnCount() int {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return len(g.byDevEUI)
+}
+
 // Close stops the TCP server.
 func (g *Gateway) Close() error {
 	if g.srv != nil {
