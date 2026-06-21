@@ -7,18 +7,31 @@ protocol, and is managed through a web UI. No radio hardware: tags talk to the
 gateway over TCP, and the gateway forwards to AWS over Basic Station (WebSocket).
 All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 
-> **Status:** early development. Phase 0 (scaffolding, persistence, gateway
-> identity) is in place; the simulator, Basic Station client, REST/WebSocket API,
-> and SPA land in subsequent phases.
+> **Status:** early development. Phases 0–1 are in place (scaffolding,
+> persistence, gateway identity, and the tag PHY core); the gateway/Basic
+> Station client, TCP transport, REST/WebSocket API, and SPA land in subsequent
+> phases.
 
-## Features (Phase 0)
+## Features
 
+**Phase 0 — scaffolding & persistence**
 - Single static binary (`CGO_ENABLED=0`, pure-Go SQLite via `modernc.org/sqlite`).
 - SQLite persistence with embedded, versioned migrations (goose).
 - Gateway **EUI-64 generated and persisted on first run**, stable across
   restarts, overridable via config/env/flag.
 - Bootstrap configuration via YAML + environment overrides.
 - Minimal health endpoint and graceful shutdown.
+
+**Phase 1 — tag PHY core**
+- OTAA 1.0.3 join (request build, accept parse) with **NwkSKey/AppSKey
+  derivation** via `brocaar/lorawan`.
+- Data uplink build and downlink decode (FRMPayload decrypt + MAC-command
+  surfacing).
+- Payload generators: static, counter, random, ramp, sine.
+- Per-device session persistence: **monotonic, never-reused DevNonce** and frame
+  counters survive restarts.
+- Sensitive columns (AppKey, session keys) **encrypted at rest** (AES-256-GCM,
+  AAD-bound) via `CYLON_DB_KEY`.
 
 ## Quick start
 
@@ -66,6 +79,18 @@ sessions) lives in the database.
 | `gateway.eui_prefix` | `CYLON_GATEWAY_EUI_PREFIX` | _(none)_ | Optional EUI prefix; a 3-byte OUI is expanded with `FFFE`. |
 | `gateway.connection.creds_dir` | `CYLON_GATEWAY_CONNECTION_CREDS_DIR` | `/etc/cylon/creds` | Basic Station credential volume. |
 | `sim.realtime` | `CYLON_SIM_REALTIME` | `true` | Real-time vs. accelerated clock. |
+
+### Secrets at rest
+
+Sensitive columns (AppKey, session keys) are encrypted with AES-256-GCM when
+`CYLON_DB_KEY` is set to a 32-byte key (64 hex chars or base64):
+
+```sh
+export CYLON_DB_KEY="$(openssl rand -hex 32)"
+```
+
+If unset, the binary runs in dev mode and stores these values **unencrypted**
+with a loud warning. The API never returns full keys (masked to the last 4).
 
 ## Docker
 

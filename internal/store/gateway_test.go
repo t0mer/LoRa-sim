@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/t0mer/cylon/internal/db"
+	"github.com/t0mer/cylon/internal/secret"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -19,7 +20,7 @@ func newTestStore(t *testing.T) *Store {
 	if err := db.Migrate(database, "up"); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	return New(database)
+	return New(database, secret.NewInsecureDisabled())
 }
 
 func TestGatewayGetNotFound(t *testing.T) {

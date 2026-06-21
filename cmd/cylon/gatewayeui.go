@@ -30,7 +30,11 @@ func newGatewayEUICmd() *cobra.Command {
 				return err
 			}
 
-			repo := store.New(database).Gateway()
+			cipher, err := newCipher(nil)
+			if err != nil {
+				return err
+			}
+			repo := store.New(database, cipher).Gateway()
 			ctx := context.Background()
 
 			var g *store.Gateway
