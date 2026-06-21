@@ -25,6 +25,7 @@ const (
 const (
 	WindowRX1    = "rx1"
 	WindowRX2    = "rx2"
+	WindowClassB = "classb"
 	WindowClassC = "classc"
 )
 

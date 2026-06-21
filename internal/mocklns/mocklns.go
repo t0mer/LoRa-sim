@@ -17,10 +17,12 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/brocaar/lorawan"
 	"github.com/coder/websocket"
 
+	"github.com/t0mer/cylon/internal/classb"
 	"github.com/t0mer/cylon/internal/gateway/protocol"
 	"github.com/t0mer/cylon/internal/tag"
 )
@@ -32,10 +34,11 @@ type Config struct {
 	AppKey    lorawan.AES128Key
 	DevAddr   lorawan.DevAddr
 	JoinNonce uint32
-	RX2Freq   uint32
-	RX2DR     uint8
-	RxDelay   int
-	Logger    *slog.Logger
+	RX2Freq    uint32
+	RX2DR      uint8
+	RxDelay    int
+	BeaconTime uint32 // GPS seconds of the current beacon period (Class B)
+	Logger     *slog.Logger
 }
 
 func (c *Config) withDefaults() {
@@ -196,9 +199,28 @@ func (s *Server) write(ctx context.Context, c *websocket.Conn, b []byte) error {
 }
 
 // PushClassC sends an unsolicited Class C (dC=2) data downlink to a joined
-// device over the RX2 window. It derives the device's session keys from the
-// join it issued and encrypts the payload, exercising the always-on RX path.
+// device over the always-open RX2 window.
 func (s *Server) PushClassC(ctx context.Context, devEUI string, fport uint8, data []byte) error {
+	return s.pushDownlink(ctx, devEUI, fport, data, 2, 0)
+}
+
+// PushClassB sends a Class B (dC=1) data downlink scheduled to the device's next
+// ping slot. The slot time (GPS-aligned) is computed from the beacon time and
+// DevAddr and carried as gpstime; with no real radio it is delivered promptly.
+func (s *Server) PushClassB(ctx context.Context, devEUI string, fport uint8, data []byte, periodicity uint8) error {
+	slot, _ := classb.NextPingSlot(s.beaconTime(), s.cfg.DevAddr, periodicity, 0)
+	gpstime := int64(s.beaconTime())*int64(time.Second/time.Microsecond) + int64(slot/time.Microsecond)
+	return s.pushDownlink(ctx, devEUI, fport, data, 1, gpstime)
+}
+
+// beaconTime returns the GPS time (seconds) of the current beacon period start.
+func (s *Server) beaconTime() uint32 {
+	return s.cfg.BeaconTime
+}
+
+// pushDownlink derives the device session keys, encrypts the payload, and sends
+// a dnmsg with the given downlink class (dC) and optional gpstime.
+func (s *Server) pushDownlink(ctx context.Context, devEUI string, fport uint8, data []byte, dc int, gpstime int64) error {
 	s.mu.Lock()
 	conn := s.conn
 	ji := s.sessions[devEUI]
@@ -227,8 +249,9 @@ func (s *Server) PushClassC(ctx context.Context, devEUI string, fport uint8, dat
 		return err
 	}
 	dn := protocol.Dnmsg{
-		MsgType: protocol.TypeDnmsg, DevEui: devEUI, DC: 2, DIID: s.diid.Add(1),
+		MsgType: protocol.TypeDnmsg, DevEui: devEUI, DC: dc, DIID: s.diid.Add(1),
 		Pdu: hex.EncodeToString(pdu), RX2DR: s.cfg.RX2DR, RX2Freq: s.cfg.RX2Freq,
+		GpsTime: gpstime,
 	}
 	b, err := protocol.Encode(dn)
 	if err != nil {

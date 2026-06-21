@@ -101,6 +101,7 @@ type Dnmsg struct {
 	RX2Freq  uint32 `json:"RX2Freq"`
 	Priority int    `json:"priority"`
 	XTime    int64  `json:"xtime"`
+	GpsTime  int64  `json:"gpstime,omitempty"` // Class B ping-slot time
 	RCtx     int64  `json:"rctx"`
 }
 
