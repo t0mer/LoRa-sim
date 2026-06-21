@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -11,7 +13,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/t0mer/cylon/internal/api"
+	"github.com/t0mer/cylon/internal/config"
 	"github.com/t0mer/cylon/internal/db"
+	"github.com/t0mer/cylon/internal/gateway"
+	"github.com/t0mer/cylon/internal/gateway/protocol"
 	"github.com/t0mer/cylon/internal/store"
 	"github.com/t0mer/cylon/internal/version"
 )
@@ -48,14 +53,25 @@ func newServeCmd() *cobra.Command {
 			}
 			logger.Info("gateway identity", "eui", g.EUI, "region", g.Region)
 
+			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
+
+			// When an LNS URL is configured, run the gateway: connect to the LNS
+			// (mock-lns or LNS-direct) and accept tag TCP connections. CUPS and
+			// the credential volume arrive in Phase 4.
+			if cfg.Gateway.LNSURL != "" {
+				closeGW, err := startGateway(ctx, cfg, g.EUI, logger)
+				if err != nil {
+					return err
+				}
+				defer closeGW()
+			}
+
 			srv := &http.Server{
 				Addr:              cfg.Server.HTTPListen,
 				Handler:           api.NewRouter(version.Version, g.EUI),
 				ReadHeaderTimeout: 5 * time.Second,
 			}
-
-			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-			defer stop()
 
 			errCh := make(chan error, 1)
 			go func() {
@@ -76,4 +92,34 @@ func newServeCmd() *cobra.Command {
 			}
 		},
 	}
+}
+
+// startGateway connects the gateway to the LNS and starts its tag-facing TCP
+// listener. The returned close func stops the listener and the LNS connection.
+func startGateway(ctx context.Context, cfg *config.Config, eui string, logger *slog.Logger) (func(), error) {
+	lns, err := gateway.ConnectLNS(ctx, cfg.Gateway.LNSURL, protocol.Version{
+		Station:  "cylon",
+		Model:    "cylon-sim",
+		Firmware: version.Version,
+		Protocol: 2,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connecting to LNS: %w", err)
+	}
+
+	gw := gateway.New(eui, lns, logger)
+	if err := gw.ListenTCP(cfg.Gateway.TCPListen); err != nil {
+		lns.Close()
+		return nil, err
+	}
+	go func() {
+		if err := lns.Run(gw.OnDnmsg); err != nil && ctx.Err() == nil {
+			logger.Error("LNS connection closed", "err", err)
+		}
+	}()
+
+	return func() {
+		gw.Close()
+		lns.Close()
+	}, nil
 }

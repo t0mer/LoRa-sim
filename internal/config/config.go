@@ -39,6 +39,7 @@ type GatewayConfig struct {
 	EUI        string           `mapstructure:"eui"`
 	EUIPrefix  string           `mapstructure:"eui_prefix"`
 	TCPListen  string           `mapstructure:"tcp_listen"`
+	LNSURL     string           `mapstructure:"lns_url"`
 	Connection ConnectionConfig `mapstructure:"connection"`
 }
 
@@ -96,7 +97,9 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("server.log_level", d.Server.LogLevel)
 	v.SetDefault("store.path", d.Store.Path)
 	v.SetDefault("gateway.eui", d.Gateway.EUI)
+	v.SetDefault("gateway.eui_prefix", d.Gateway.EUIPrefix)
 	v.SetDefault("gateway.tcp_listen", d.Gateway.TCPListen)
+	v.SetDefault("gateway.lns_url", d.Gateway.LNSURL)
 	v.SetDefault("gateway.connection.creds_dir", d.Gateway.Connection.CredsDir)
 	v.SetDefault("sim.realtime", d.Sim.Realtime)
 
