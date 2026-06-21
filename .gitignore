@@ -45,13 +45,13 @@ vendor/
 *.crt
 *.cert
 *.trust
-creds/
+/creds/
 .env
 .env.*
 !.env.example
 
 # Runtime data / databases
-data/
+/data/
 *.db
 *.db-journal
 *.db-wal
