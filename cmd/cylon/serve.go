@@ -37,7 +37,11 @@ func newServeCmd() *cobra.Command {
 				return err
 			}
 
-			st := store.New(database)
+			cipher, err := newCipher(logger)
+			if err != nil {
+				return err
+			}
+			st := store.New(database, cipher)
 			g, err := st.Gateway().EnsureEUI(cmd.Context(), cfg.Gateway.EUI, cfg.Gateway.EUIPrefix)
 			if err != nil {
 				return err
