@@ -41,3 +41,6 @@ func (s *Store) Tags() *TagRepo { return &TagRepo{s: s} }
 
 // Sessions returns the session repository.
 func (s *Store) Sessions() *SessionRepo { return &SessionRepo{s: s} }
+
+// Events returns the traffic-event repository.
+func (s *Store) Events() *EventRepo { return &EventRepo{s: s} }
