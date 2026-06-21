@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/t0mer/cylon/internal/creds"
+	"github.com/t0mer/cylon/internal/gateway/protocol"
 )
 
 // PostCUPS performs the CUPS update-info exchange: it POSTs the JSON request to
 // <cupsURI>/update-info and decodes the binary response.
-func PostCUPS(ctx context.Context, client *http.Client, cupsURI string, req CupsRequest) (*CupsResponse, error) {
+func PostCUPS(ctx context.Context, client *http.Client, cupsURI string, req protocol.CupsRequest) (*protocol.CupsResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -39,19 +40,19 @@ func PostCUPS(ctx context.Context, client *http.Client, cupsURI string, req Cups
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("CUPS returned %d: %s", resp.StatusCode, raw)
 	}
-	return ParseCupsResponse(raw)
+	return protocol.ParseCupsResponse(raw)
 }
 
 // applyTCUpdate writes back the tc.* credential material from a CUPS response
 // into credsDir, splitting the credential bundle into trust/cert/key.
-func applyTCUpdate(credsDir string, resp *CupsResponse) error {
+func applyTCUpdate(credsDir string, resp *protocol.CupsResponse) error {
 	if resp.TcURI == "" && len(resp.TcCred) == 0 {
 		return nil
 	}
 	var trust, cert, key []byte
 	if len(resp.TcCred) > 0 {
 		var err error
-		trust, cert, key, err = SplitCredBundle(resp.TcCred)
+		trust, cert, key, err = protocol.SplitCredBundle(resp.TcCred)
 		if err != nil {
 			return fmt.Errorf("splitting tc credential bundle: %w", err)
 		}
@@ -62,7 +63,7 @@ func applyTCUpdate(credsDir string, resp *CupsResponse) error {
 // BootstrapCUPS runs the full CUPS bootstrap: load credentials, exchange
 // update-info over mutual TLS, and write any returned tc.* credentials back into
 // credsDir so the caller can then connect to the LNS. It returns the response.
-func BootstrapCUPS(ctx context.Context, credsDir string, req CupsRequest) (*CupsResponse, error) {
+func BootstrapCUPS(ctx context.Context, credsDir string, req protocol.CupsRequest) (*protocol.CupsResponse, error) {
 	c, err := creds.Load(credsDir)
 	if err != nil {
 		return nil, err

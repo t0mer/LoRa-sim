@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/t0mer/cylon/internal/creds"
+	"github.com/t0mer/cylon/internal/gateway/protocol"
 )
 
 func genPEM(t *testing.T) (certPEM, keyPEM []byte) {
@@ -40,16 +41,16 @@ func TestPostCUPS(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		var req CupsRequest
+		var req protocol.CupsRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.Router != "0102030405060708" {
 			t.Errorf("router = %q", req.Router)
 		}
-		_, _ = w.Write(BuildCupsResponse(CupsResponse{TcURI: "wss://new.lns:443", TcCred: bundle}))
+		_, _ = w.Write(protocol.BuildCupsResponse(protocol.CupsResponse{TcURI: "wss://new.lns:443", TcCred: bundle}))
 	}))
 	defer srv.Close()
 
-	resp, err := PostCUPS(context.Background(), srv.Client(), srv.URL, CupsRequest{Router: "0102030405060708"})
+	resp, err := PostCUPS(context.Background(), srv.Client(), srv.URL, protocol.CupsRequest{Router: "0102030405060708"})
 	if err != nil {
 		t.Fatalf("PostCUPS: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestPostCUPS(t *testing.T) {
 
 func TestApplyTCUpdateWritesBack(t *testing.T) {
 	dir := t.TempDir()
-	resp := &CupsResponse{TcURI: "wss://x.lns:443", TcCred: credBundle(t)}
+	resp := &protocol.CupsResponse{TcURI: "wss://x.lns:443", TcCred: credBundle(t)}
 	if err := applyTCUpdate(dir, resp); err != nil {
 		t.Fatalf("applyTCUpdate: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestApplyTCUpdateWritesBack(t *testing.T) {
 
 func TestApplyTCUpdateNoopOnEmpty(t *testing.T) {
 	dir := t.TempDir()
-	if err := applyTCUpdate(dir, &CupsResponse{}); err != nil {
+	if err := applyTCUpdate(dir, &protocol.CupsResponse{}); err != nil {
 		t.Errorf("applyTCUpdate(empty) = %v, want nil", err)
 	}
 }
