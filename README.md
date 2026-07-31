@@ -15,17 +15,17 @@ All state lives in **SQLite**, and the SPA is embedded into a single Go binary.
 ## Screenshots
 
 ### Dashboard — live traffic & gateway status
-![Dashboard](assets/screenshots/dashboard.png)
+![Dashboard](https://raw.githubusercontent.com/t0mer/LoRa-sim/main/assets/screenshots/dashboard.png)
 
 ### Tags — fleet management, join & uplink
-![Tags](assets/screenshots/tags.png)
+![Tags](https://raw.githubusercontent.com/t0mer/LoRa-sim/main/assets/screenshots/tags.png)
 
 ### Traffic — live, filterable event log
-![Traffic](assets/screenshots/traffic.png)
+![Traffic](https://raw.githubusercontent.com/t0mer/LoRa-sim/main/assets/screenshots/traffic.png)
 
 ### Gateway & light theme
-![Gateway](assets/screenshots/gateway.png)
-![Dashboard (light)](assets/screenshots/dashboard-light.png)
+![Gateway](https://raw.githubusercontent.com/t0mer/LoRa-sim/main/assets/screenshots/gateway.png)
+![Dashboard (light)](https://raw.githubusercontent.com/t0mer/LoRa-sim/main/assets/screenshots/dashboard-light.png)
 
 ## Features
 
